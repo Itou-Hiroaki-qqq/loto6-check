@@ -274,16 +274,53 @@ export async function scrapeWinningNumbersWithPuppeteer(url: string): Promise<Sc
         // Vercel環境かどうかを判定
         const isVercel = process.env.VERCEL === '1' || process.env.VERCEL_ENV !== undefined
         
+        console.log(`[Puppeteer Scraper] Environment: ${isVercel ? 'Vercel' : 'Local'}`)
+        
         // ブラウザの起動設定
+        let executablePath: string | undefined = undefined
+        
+        if (isVercel) {
+            try {
+                // Chromiumのパスを取得
+                executablePath = await chromium.executablePath()
+                console.log(`[Puppeteer Scraper] Chromium executable path: ${executablePath}`)
+                
+                // パスが存在するか確認
+                if (!executablePath) {
+                    throw new Error('Chromium executable path is empty')
+                }
+            } catch (error) {
+                console.error(`[Puppeteer Scraper] Error getting executable path:`, error)
+                // フォールバック: 環境変数から取得を試みる
+                executablePath = process.env.CHROMIUM_EXECUTABLE_PATH
+                if (!executablePath) {
+                    console.error(`[Puppeteer Scraper] CHROMIUM_EXECUTABLE_PATH not set, trying alternative method`)
+                    // 最後の手段: chromium.argsから推測を試みる
+                    throw new Error(`Chromium executable path could not be determined. Error: ${error instanceof Error ? error.message : String(error)}`)
+                }
+            }
+        }
+        
         const launchOptions: any = {
-            args: isVercel ? chromium.args : [],
+            args: isVercel ? [
+                ...chromium.args,
+                '--disable-gpu',
+                '--disable-dev-shm-usage',
+                '--disable-setuid-sandbox',
+                '--no-sandbox',
+                '--single-process',
+            ] : [],
             defaultViewport: { width: 1920, height: 1080 },
-            executablePath: isVercel 
-                ? await chromium.executablePath() 
-                : undefined, // ローカル環境ではシステムのChromeを使用
+            executablePath: executablePath,
             headless: true,
             ignoreHTTPSErrors: true,
         }
+        
+        console.log(`[Puppeteer Scraper] Launching browser with options:`, {
+            ...launchOptions,
+            executablePath: executablePath ? 'set' : 'undefined',
+            argsCount: launchOptions.args.length,
+        })
         
         browser = await puppeteer.launch(launchOptions)
         const page = await browser.newPage()
