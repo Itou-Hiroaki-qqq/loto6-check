@@ -281,8 +281,17 @@ export async function scrapeWinningNumbersWithPuppeteer(url: string): Promise<Sc
         
         if (isVercel) {
             try {
-                // Chromiumのパスを取得
-                executablePath = await chromium.executablePath()
+                // 環境変数で外部バイナリのURLが指定されている場合はそれを使用
+                const remoteExecPath = process.env.CHROMIUM_REMOTE_EXEC_PATH
+                
+                if (remoteExecPath) {
+                    console.log(`[Puppeteer Scraper] Using remote Chromium from: ${remoteExecPath}`)
+                    executablePath = await chromium.executablePath(remoteExecPath)
+                } else {
+                    // デフォルトの方法でパスを取得
+                    executablePath = await chromium.executablePath()
+                }
+                
                 console.log(`[Puppeteer Scraper] Chromium executable path: ${executablePath}`)
                 
                 // パスが存在するか確認
@@ -291,12 +300,11 @@ export async function scrapeWinningNumbersWithPuppeteer(url: string): Promise<Sc
                 }
             } catch (error) {
                 console.error(`[Puppeteer Scraper] Error getting executable path:`, error)
-                // フォールバック: 環境変数から取得を試みる
+                // フォールバック: 環境変数から直接パスを取得
                 executablePath = process.env.CHROMIUM_EXECUTABLE_PATH
                 if (!executablePath) {
-                    console.error(`[Puppeteer Scraper] CHROMIUM_EXECUTABLE_PATH not set, trying alternative method`)
-                    // 最後の手段: chromium.argsから推測を試みる
-                    throw new Error(`Chromium executable path could not be determined. Error: ${error instanceof Error ? error.message : String(error)}`)
+                    console.error(`[Puppeteer Scraper] CHROMIUM_EXECUTABLE_PATH not set`)
+                    throw new Error(`Chromium executable path could not be determined. Error: ${error instanceof Error ? error.message : String(error)}. Please set CHROMIUM_REMOTE_EXEC_PATH or CHROMIUM_EXECUTABLE_PATH environment variable.`)
                 }
             }
         }

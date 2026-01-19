@@ -30,9 +30,18 @@ AUTO_UPDATE_API_KEY=your-secure-random-api-key-here
 2. プロジェクトを選択
 3. **Settings** → **Environment Variables** を開く
 4. 以下の環境変数を追加:
+
+   **必須:**
    - **Name**: `AUTO_UPDATE_API_KEY`
    - **Value**: ローカルで生成したAPIキーと同じ値
    - **Environment**: Production, Preview, Development すべてにチェック
+
+   **推奨（Puppeteer使用時）:**
+   - **Name**: `CHROMIUM_REMOTE_EXEC_PATH`
+   - **Value**: `https://github.com/Sparticuz/chromium/releases/download/v143.0.0/chromium-v143.0.0-pack.tar.br`
+   - **Environment**: Production, Preview, Development すべてにチェック
+   - **注意**: バージョンが異なる場合は、[GitHubリリースページ](https://github.com/Sparticuz/chromium/releases)から最新のv143系のURLを確認してください
+
 5. **Save** をクリック
 
 ## 2. cron.job.orgの設定
