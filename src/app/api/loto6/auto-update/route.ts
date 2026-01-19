@@ -96,7 +96,7 @@ export async function GET(request: NextRequest) {
                     RETURNING draw_date
                 `
                 
-                if (insertResult.length > 0) {
+                if (Array.isArray(insertResult) && insertResult.length > 0) {
                     // 既存データかどうかを確認（updated_atがcreated_atと同じなら新規）
                     const existing = await sql`
                         SELECT created_at, updated_at 
