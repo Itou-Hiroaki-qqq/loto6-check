@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { sql } from '@/lib/neon'
-import { scrapeWinningNumbersWithPuppeteer } from '@/lib/loto6/scraper'
+import { scrapeWinningNumbers, scrapeWinningNumbersWithPuppeteer } from '@/lib/loto6/scraper'
 
 /**
  * 自動更新用APIエンドポイント
@@ -31,9 +31,31 @@ export async function GET(request: NextRequest) {
         
         console.log('[Auto Update] Starting automatic update...')
         
-        // 最新の当選番号をスクレイピング（Puppeteer使用）
+        // 最新の当選番号をスクレイピング
+        // まずCheerioのみで試し、失敗した場合はPuppeteerを使用
         const url = 'https://www.mizuhobank.co.jp/takarakuji/check/loto/loto6/index.html'
-        const results = await scrapeWinningNumbersWithPuppeteer(url)
+        let results: any[] = []
+        
+        try {
+            // まずCheerioのみで試す（Vercel環境で動作しやすい）
+            console.log('[Auto Update] Trying Cheerio-based scraping...')
+            results = await scrapeWinningNumbers(url)
+            
+            if (results.length === 0) {
+                // Cheerioで取得できなかった場合、Puppeteerを試す
+                console.log('[Auto Update] Cheerio returned no results, trying Puppeteer...')
+                results = await scrapeWinningNumbersWithPuppeteer(url)
+            }
+        } catch (error) {
+            console.error('[Auto Update] Error with Cheerio, trying Puppeteer:', error)
+            // Cheerioでエラーが発生した場合、Puppeteerを試す
+            try {
+                results = await scrapeWinningNumbersWithPuppeteer(url)
+            } catch (puppeteerError) {
+                console.error('[Auto Update] Puppeteer also failed:', puppeteerError)
+                throw puppeteerError
+            }
+        }
         
         if (results.length === 0) {
             console.warn('[Auto Update] No winning numbers found')
