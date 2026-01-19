@@ -36,24 +36,34 @@ export async function GET(request: NextRequest) {
         const url = 'https://www.mizuhobank.co.jp/takarakuji/check/loto/loto6/index.html'
         let results: any[] = []
         
-        try {
-            // まずCheerioのみで試す（Vercel環境で動作しやすい）
-            console.log('[Auto Update] Trying Cheerio-based scraping...')
-            results = await scrapeWinningNumbers(url)
-            
-            if (results.length === 0) {
-                // Cheerioで取得できなかった場合、Puppeteerを試す
-                console.log('[Auto Update] Cheerio returned no results, trying Puppeteer...')
-                results = await scrapeWinningNumbersWithPuppeteer(url)
-            }
-        } catch (error) {
-            console.error('[Auto Update] Error with Cheerio, trying Puppeteer:', error)
-            // Cheerioでエラーが発生した場合、Puppeteerを試す
+        // Railway環境ではPuppeteerを直接使用（動作しやすい）
+        // Vercel環境ではCheerioを優先的に使用
+        const isRailway = process.env.RAILWAY_ENVIRONMENT !== undefined || process.env.RAILWAY_ENVIRONMENT_NAME !== undefined
+        
+        if (isRailway) {
+            // Railway環境ではPuppeteerを直接使用
+            console.log('[Auto Update] Railway environment detected, using Puppeteer...')
+            results = await scrapeWinningNumbersWithPuppeteer(url)
+        } else {
+            // Vercel環境ではCheerioを優先的に使用
             try {
-                results = await scrapeWinningNumbersWithPuppeteer(url)
-            } catch (puppeteerError) {
-                console.error('[Auto Update] Puppeteer also failed:', puppeteerError)
-                throw puppeteerError
+                console.log('[Auto Update] Trying Cheerio-based scraping...')
+                results = await scrapeWinningNumbers(url)
+                
+                if (results.length === 0) {
+                    // Cheerioで取得できなかった場合、Puppeteerを試す
+                    console.log('[Auto Update] Cheerio returned no results, trying Puppeteer...')
+                    results = await scrapeWinningNumbersWithPuppeteer(url)
+                }
+            } catch (error) {
+                console.error('[Auto Update] Error with Cheerio, trying Puppeteer:', error)
+                // Cheerioでエラーが発生した場合、Puppeteerを試す
+                try {
+                    results = await scrapeWinningNumbersWithPuppeteer(url)
+                } catch (puppeteerError) {
+                    console.error('[Auto Update] Puppeteer also failed:', puppeteerError)
+                    throw puppeteerError
+                }
             }
         }
         

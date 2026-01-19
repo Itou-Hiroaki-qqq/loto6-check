@@ -271,15 +271,17 @@ export async function scrapeWinningNumbersWithPuppeteer(url: string): Promise<Sc
     try {
         console.log(`[Puppeteer Scraper] Fetching URL: ${url}`)
         
-        // Vercel環境かどうかを判定
+        // 環境判定
         const isVercel = process.env.VERCEL === '1' || process.env.VERCEL_ENV !== undefined
+        const isRailway = process.env.RAILWAY_ENVIRONMENT !== undefined || process.env.RAILWAY_ENVIRONMENT_NAME !== undefined
         
-        console.log(`[Puppeteer Scraper] Environment: ${isVercel ? 'Vercel' : 'Local'}`)
+        console.log(`[Puppeteer Scraper] Environment: ${isVercel ? 'Vercel' : isRailway ? 'Railway' : 'Local'}`)
         
         // ブラウザの起動設定
         let executablePath: string | undefined = undefined
         
-        if (isVercel) {
+        // VercelまたはRailway環境の場合
+        if (isVercel || isRailway) {
             try {
                 // 環境変数で外部バイナリのURLが指定されている場合はそれを使用
                 const remoteExecPath = process.env.CHROMIUM_REMOTE_EXEC_PATH
@@ -310,7 +312,7 @@ export async function scrapeWinningNumbersWithPuppeteer(url: string): Promise<Sc
         }
         
         const launchOptions: any = {
-            args: isVercel ? [
+            args: (isVercel || isRailway) ? [
                 ...chromium.args,
                 '--disable-gpu',
                 '--disable-dev-shm-usage',
