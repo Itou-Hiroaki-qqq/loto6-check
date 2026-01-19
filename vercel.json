@@ -1,8 +1,8 @@
 {
-  "functions": {
-    "src/app/api/loto6/auto-update/route.ts": {
-      "maxDuration": 60,
-      "memory": 3008
+    "functions": {
+        "src/app/api/loto6/auto-update/route.ts": {
+            "maxDuration": 60,
+            "memory": 3008
+        }
     }
-  }
 }
