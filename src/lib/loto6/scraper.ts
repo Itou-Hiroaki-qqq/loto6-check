@@ -1,6 +1,6 @@
 import * as cheerio from 'cheerio'
 import puppeteer from 'puppeteer-core'
-import chromium from '@sparticuz/chromium-min'
+import chromium from '@sparticuz/chromium'
 
 export interface ScrapedWinningNumbers {
     drawDate: string // YYYY-MM-DD
@@ -272,16 +272,17 @@ export async function scrapeWinningNumbersWithPuppeteer(url: string): Promise<Sc
         console.log(`[Puppeteer Scraper] Fetching URL: ${url}`)
         
         // Vercel環境かどうかを判定
-        const isVercel = process.env.VERCEL === '1'
+        const isVercel = process.env.VERCEL === '1' || process.env.VERCEL_ENV !== undefined
         
         // ブラウザの起動設定
         const launchOptions: any = {
-            args: chromium.args,
+            args: isVercel ? chromium.args : [],
             defaultViewport: { width: 1920, height: 1080 },
             executablePath: isVercel 
                 ? await chromium.executablePath() 
                 : undefined, // ローカル環境ではシステムのChromeを使用
             headless: true,
+            ignoreHTTPSErrors: true,
         }
         
         browser = await puppeteer.launch(launchOptions)
