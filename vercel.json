@@ -1,0 +1,7 @@
+{
+    "functions": {
+        "src/app/api/loto6/auto-update/route.ts": {
+            "maxDuration": 60
+        }
+    }
+}

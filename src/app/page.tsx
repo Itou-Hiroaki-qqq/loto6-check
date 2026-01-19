@@ -1,65 +1,348 @@
-import Image from "next/image";
+'use client'
+
+import { useEffect, useState } from 'react'
+import { createClient } from '@/lib/supabase/client'
+import { useRouter } from 'next/navigation'
+import Header from '@/components/Header'
+import Footer from '@/components/Footer'
+import Loto6NumberInput from '@/components/Loto6NumberInput'
+import RegisteredNumbers from '@/components/RegisteredNumbers'
+import WinningNumbersTable from '@/components/WinningNumbersTable'
+import { format } from 'date-fns'
+
+interface RegisteredNumber {
+  id: string
+  numbers: number[]
+  created_at: string
+}
+
+interface CheckResult {
+  userNumberId: string
+  userNumbers: number[]
+  prizeLevel: string
+  matchCount: number
+  bonusMatch: boolean
+  winningNumbers: {
+    drawDate: string
+    mainNumbers: number[]
+    bonusNumber: number
+  }
+}
 
 export default function Home() {
+  const [registeredNumbers, setRegisteredNumbers] = useState<RegisteredNumber[]>([])
+  const [checkResults, setCheckResults] = useState<CheckResult[]>([])
+  const [loading, setLoading] = useState(false)
+  const [registerLoading, setRegisterLoading] = useState(false)
+  const [deleting, setDeleting] = useState<string | null>(null)
+  const [checking, setChecking] = useState(false)
+  const [startDate, setStartDate] = useState('')
+  const [endDate, setEndDate] = useState('')
+  const router = useRouter()
+  const supabase = createClient()
+
+  useEffect(() => {
+    const init = async () => {
+      const isAuthenticated = await checkAuth()
+      if (isAuthenticated) {
+        await loadRegisteredNumbers()
+      }
+    }
+    init()
+  }, [])
+
+  useEffect(() => {
+    if (registeredNumbers.length > 0) {
+      loadDefaultCheckResults()
+    }
+  }, [registeredNumbers.length])
+
+  const checkAuth = async (): Promise<boolean> => {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    if (!user) {
+      router.push('/login')
+      return false
+    }
+    return true
+  }
+
+  const loadRegisteredNumbers = async () => {
+    try {
+      const response = await fetch('/api/loto6/list')
+      
+      // リダイレクトされた場合（HTMLが返る）
+      const contentType = response.headers.get('content-type')
+      if (!contentType || !contentType.includes('application/json')) {
+        console.warn('Response is not JSON, might be redirected')
+        return
+      }
+      
+      if (response.ok) {
+        const data = await response.json()
+        setRegisteredNumbers(data.numbers || [])
+      } else if (response.status === 401) {
+        // 認証エラーの場合はログインページへ
+        router.push('/login')
+      }
+    } catch (error) {
+      console.error('Error loading registered numbers:', error)
+    }
+  }
+
+  const loadDefaultCheckResults = async () => {
+    if (registeredNumbers.length === 0) {
+      setCheckResults([])
+      return
+    }
+
+    setChecking(true)
+    try {
+      const response = await fetch('/api/loto6/from-db', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({}),
+      })
+
+      // リダイレクトされた場合（HTMLが返る）
+      const contentType = response.headers.get('content-type')
+      if (!contentType || !contentType.includes('application/json')) {
+        console.warn('Response is not JSON, might be redirected')
+        return
+      }
+
+      if (response.ok) {
+        const data = await response.json()
+        if (data.error && data.results?.length === 0) {
+          // 当選番号が見つからない場合（デフォルトロード時は警告だけ）
+          console.warn('Default check: No winning numbers found', data.error)
+          setCheckResults([])
+        } else {
+          setCheckResults(data.results || [])
+        }
+      } else if (response.status === 401) {
+        // 認証エラーの場合はログインページへ
+        router.push('/login')
+      }
+    } catch (error) {
+      console.error('Error loading check results:', error)
+    } finally {
+      setChecking(false)
+    }
+  }
+
+  const handleRegister = async (numbers: number[]) => {
+    setRegisterLoading(true)
+    try {
+      const response = await fetch('/api/loto6/register', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ numbers }),
+      })
+
+      // リダイレクトされた場合（HTMLが返る）
+      const contentType = response.headers.get('content-type')
+      if (!contentType || !contentType.includes('application/json')) {
+        if (response.status === 401) {
+          router.push('/login')
+        } else {
+          alert('登録に失敗しました。認証が必要です。')
+        }
+        return
+      }
+
+      if (response.ok) {
+        await loadRegisteredNumbers()
+        // 登録後にチェック結果を更新
+        if (registeredNumbers.length > 0 || true) {
+          await loadDefaultCheckResults()
+        }
+      } else {
+        const errorData = await response.json()
+        alert(errorData.error || '登録に失敗しました')
+      }
+    } catch (error) {
+      console.error('Error registering numbers:', error)
+      alert('登録に失敗しました')
+    } finally {
+      setRegisterLoading(false)
+    }
+  }
+
+  const handleDelete = async (id: string) => {
+    setDeleting(id)
+    try {
+      const response = await fetch(`/api/loto6/delete?id=${id}`, {
+        method: 'DELETE',
+      })
+
+      if (response.ok) {
+        await loadRegisteredNumbers()
+        // 削除後にチェック結果を更新
+        await loadDefaultCheckResults()
+      }
+    } catch (error) {
+      console.error('Error deleting numbers:', error)
+      alert('削除に失敗しました')
+    } finally {
+      setDeleting(null)
+    }
+  }
+
+  const handleCheck = async () => {
+    if (registeredNumbers.length === 0) {
+      alert('まず番号を登録してください')
+      return
+    }
+
+    setChecking(true)
+    try {
+      const response = await fetch('/api/loto6/from-db', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          startDate: startDate || undefined,
+          endDate: endDate || undefined,
+        }),
+      })
+
+      // リダイレクトされた場合（HTMLが返る）
+      const contentType = response.headers.get('content-type')
+      if (!contentType || !contentType.includes('application/json')) {
+        if (response.status === 401) {
+          router.push('/login')
+        } else {
+          alert('チェックに失敗しました。認証が必要です。')
+        }
+        return
+      }
+
+      if (response.ok) {
+        const data = await response.json()
+        if (data.error && data.results?.length === 0) {
+          // 当選番号が見つからない場合
+          alert(data.error)
+          setCheckResults([])
+        } else {
+          setCheckResults(data.results || [])
+        }
+      } else {
+        const errorData = await response.json()
+        alert(errorData.error || 'チェックに失敗しました')
+        setCheckResults([])
+      }
+    } catch (error) {
+      console.error('Error checking numbers:', error)
+      alert('チェックに失敗しました')
+    } finally {
+      setChecking(false)
+    }
+  }
+
+  // ユーザー番号リストを生成
+  const userNumbersList = registeredNumbers.map((item) => ({
+    id: item.id,
+    numbers: item.numbers,
+  }))
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+    <div className="min-h-screen flex flex-col">
+      <Header />
+
+      <main className="grow container mx-auto px-4 py-8 max-w-6xl">
+        <div className="space-y-8">
+          {/* 番号登録セクション */}
+          <section className="card bg-base-100 shadow-xl">
+            <div className="card-body">
+              <Loto6NumberInput
+                onRegister={handleRegister}
+                loading={registerLoading}
+              />
+
+              <div className="divider"></div>
+
+              <RegisteredNumbers
+                numbers={registeredNumbers}
+                onDelete={handleDelete}
+                deleting={deleting || undefined}
+              />
+            </div>
+          </section>
+
+          {/* 当選番号チェックセクション */}
+          <section className="card bg-base-100 shadow-xl">
+            <div className="card-body">
+              <h2 className="card-title text-2xl mb-4">当選番号</h2>
+
+              <div className="space-y-4">
+                <div>
+                  <p className="mb-2">チェックしたい期間を入力してください（入力しなくても最新の10件が表示されます）</p>
+                  <div className="flex flex-wrap gap-2">
+                    <input
+                      type="date"
+                      className="input input-bordered"
+                      value={startDate}
+                      onChange={(e) => setStartDate(e.target.value)}
+                      placeholder="開始日"
+                    />
+                    <span className="flex pt-3">～</span>
+                    <div className="flex flex-col">
+                      <input
+                        type="date"
+                        className="input input-bordered"
+                        value={endDate}
+                        onChange={(e) => setEndDate(e.target.value)}
+                        placeholder="終了日"
+                      />
+                      <span className="text-xs text-gray-500 mt-1">
+                        入力がないときは最新までを検索します
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  className="btn btn-primary"
+                  onClick={handleCheck}
+                  disabled={checking || registeredNumbers.length === 0}
+                >
+                  {checking ? 'チェック中...' : '当選番号チェック'}
+                </button>
+              </div>
+
+              <div className="divider"></div>
+
+              {checking && (
+                <div className="flex justify-center py-8">
+                  <span className="loading loading-spinner loading-lg"></span>
+                </div>
+              )}
+
+              {!checking && checkResults.length > 0 && (
+                <WinningNumbersTable
+                  results={checkResults}
+                  userNumbersList={userNumbersList}
+                />
+              )}
+
+              {!checking && checkResults.length === 0 && registeredNumbers.length > 0 && (
+                <div className="text-gray-500 py-4">
+                  当選番号がありません。期間を指定してチェックしてください。
+                </div>
+              )}
+            </div>
+          </section>
         </div>
       </main>
+
+      <Footer />
     </div>
-  );
+  )
 }
