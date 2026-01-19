@@ -12,7 +12,7 @@
 - DaisyUI
 - Supabase Auth (認証)
 - Neon (PostgreSQL データベース)
-- Vercel (デプロイ)
+- Railway (デプロイ)
 
 ## セットアップ手順
 
