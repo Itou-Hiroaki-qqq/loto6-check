@@ -1,13 +1,13 @@
 import { NextResponse } from 'next/server'
-import { scrapeWinningNumbers } from '@/lib/loto6/scraper'
+import { scrapeWinningNumbersWithPuppeteer } from '@/lib/loto6/scraper'
 
 export async function GET() {
     try {
         // テスト用URL
         const testUrl = 'https://www.mizuhobank.co.jp/takarakuji/check/loto/loto6/index.html'
         
-        console.log('[Test Scraper] Starting test scrape...')
-        const results = await scrapeWinningNumbers(testUrl)
+        console.log('[Test Scraper] Starting test scrape with Puppeteer...')
+        const results = await scrapeWinningNumbersWithPuppeteer(testUrl)
         
         return NextResponse.json({
             success: true,

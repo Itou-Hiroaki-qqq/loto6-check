@@ -50,12 +50,57 @@ Railwayは自動的にNext.jsプロジェクトを検出しますが、必要に
 3. **「Start Command」**が`npm start`になっているか確認
 4. **「Root Directory」**が空（ルートディレクトリ）になっているか確認
 
-## 5. デプロイの確認
+## 5. デプロイの確認とURLの取得
 
-1. **「Deployments」**タブでデプロイの進行状況を確認
-2. デプロイが完了すると、**「View Logs」**でログを確認できます
-3. デプロイが成功すると、**「Settings」**タブの**「Domains」**セクションにURLが表示されます
+### URLの確認方法
+
+RailwayのUIは更新されることがあります。以下のいずれかの方法でURLを確認できます：
+
+#### 方法1: プロジェクトのメインページから確認（最も一般的）
+
+1. Railwayダッシュボードでプロジェクトを開く
+2. プロジェクトのメインページ（**「Deployments」**タブまたは**「Overview」**タブ）を確認
+3. デプロイが成功しているサービスの下に、**「Public Domain」**または**「Generate Domain」**というボタン/リンクが表示されます
+4. クリックすると、URLが表示されます
    - 例: `https://loto6-check-production.up.railway.app`
+
+#### 方法2: サービス（Service）ページから確認
+
+1. プロジェクト内で、デプロイされたサービス（通常は「Web Service」など）をクリック
+2. サービスのページで、上部または右側に**「Settings」**タブをクリック
+3. **「Networking」**セクションまたは**「Domains」**セクションを探す
+4. **「Generate Domain」**ボタンをクリック（まだドメインが生成されていない場合）
+5. 生成されたURLが表示されます
+
+#### 方法3: デプロイログから確認
+
+1. **「Deployments」**タブで最新のデプロイをクリック
+2. **「View Logs」**をクリック
+3. ログの中に、デプロイされたURLが表示される場合があります
+   - 例: `Deployed to https://loto6-check-production.up.railway.app`
+
+#### 方法4: 設定から確認
+
+1. プロジェクトの**「Settings」**タブを開く
+2. **「Networking」**セクションを探す
+3. **「Public Networking」**セクションで、**「Generate Domain」**をクリック
+4. 生成されたURLが表示されます
+
+### URLの形式
+
+RailwayのURLは通常、以下の形式です：
+```
+https://[プロジェクト名]-[環境名].up.railway.app
+```
+
+例：
+- `https://loto6-check-production.up.railway.app`
+- `https://loto6-check.up.railway.app`
+
+### カスタムドメインの設定（オプション）
+
+1. 上記の方法でRailwayのデフォルトドメインを取得
+2. **「Settings」** → **「Networking」** → **「Custom Domain」**でカスタムドメインを設定可能
 
 ## 6. カスタムドメインの設定（オプション）
 

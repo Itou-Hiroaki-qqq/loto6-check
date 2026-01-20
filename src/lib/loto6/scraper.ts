@@ -1,6 +1,32 @@
 import * as cheerio from 'cheerio'
-import puppeteer from 'puppeteer-core'
+import puppeteerCore from 'puppeteer-core'
 import chromium from '@sparticuz/chromium'
+
+// ローカル環境では通常のpuppeteerを使用（テストアプリの成功パターン）
+// 本番環境（Vercel/Railway）ではpuppeteer-coreを使用
+let puppeteerInstance: typeof puppeteerCore
+async function getPuppeteer() {
+    if (!puppeteerInstance) {
+        const isVercel = process.env.VERCEL === '1' || process.env.VERCEL_ENV !== undefined
+        const isRailway = process.env.RAILWAY_ENVIRONMENT !== undefined || process.env.RAILWAY_ENVIRONMENT_NAME !== undefined
+        
+        if (isVercel || isRailway) {
+            // 本番環境ではpuppeteer-coreを使用
+            puppeteerInstance = puppeteerCore
+        } else {
+            // ローカル環境では通常のpuppeteerを使用（動的インポート）
+            try {
+                const puppeteerLocal = await import('puppeteer')
+                puppeteerInstance = puppeteerLocal.default || puppeteerLocal as any
+            } catch (e) {
+                // puppeteerが見つからない場合はpuppeteer-coreを使用
+                console.warn('[Scraper] puppeteer not found, falling back to puppeteer-core')
+                puppeteerInstance = puppeteerCore
+            }
+        }
+    }
+    return puppeteerInstance
+}
 
 export interface ScrapedWinningNumbers {
     drawDate: string // YYYY-MM-DD
@@ -260,8 +286,86 @@ export async function scrapeMultipleUrls(urls: string[]): Promise<ScrapedWinning
 }
 
 /**
+ * テーブルから当選番号データを抽出（テストアプリの成功パターンを適用）
+ * @param $ Cheerioインスタンス
+ * @param $table テーブルのjQuery-likeオブジェクト
+ * @param tableIndex テーブルのインデックス（デバッグ用）
+ * @returns 抽出された当選番号データの配列
+ */
+function extractDataFromTable($: any, $table: any, tableIndex: number): ScrapedWinningNumbers[] {
+    const results: ScrapedWinningNumbers[] = []
+    
+    try {
+        // 抽選日を取得（テストアプリの成功パターン）
+        const dateText = $table.find('.js-lottery-date-pc').first().text().trim()
+        
+        let drawDate = ''
+        if (dateText) {
+            // 2026年1月5日 -> 2026-01-05
+            const match = dateText.match(/(\d{4})年(\d{1,2})月(\d{1,2})日/)
+            if (match) {
+                const [, year, month, day] = match
+                drawDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`
+            }
+        }
+        
+        // 回号を取得（テストアプリの成功パターン）
+        const issueText = $table.find('.js-lottery-issue-pc').first().text().trim()
+        let drawNumber: number | undefined
+        if (issueText) {
+            const drawMatch = issueText.match(/第(\d+)回/)
+            if (drawMatch) {
+                drawNumber = parseInt(drawMatch[1], 10)
+            }
+        }
+        
+        // 本数字を取得（テストアプリの成功パターン）
+        const numbers: number[] = []
+        $table.find('.js-lottery-number-pc').each((_: number, elem: cheerio.Element) => {
+            const numText = $(elem).text().trim()
+            const num = parseInt(numText, 10)
+            if (!isNaN(num) && num >= 1 && num <= 43) {
+                numbers.push(num)
+            }
+        })
+        
+        // ボーナス数字を取得（テストアプリの成功パターン）
+        const bonusText = $table.find('.js-lottery-bonus-pc').first().text().trim()
+        // ボーナス数字は "(04)" のような形式なので、括弧を除去して数値に変換
+        const bonusMatch = bonusText.match(/\((\d+)\)/)
+        const bonusNumber = bonusMatch ? parseInt(bonusMatch[1], 10) : parseInt(bonusText.replace(/[()]/g, ''), 10)
+        
+        // データの検証
+        if (!dateText || numbers.length !== 6 || isNaN(bonusNumber)) {
+            console.warn(`[Puppeteer Scraper] Table ${tableIndex}: Invalid data - date: "${dateText}", numbers: ${numbers.length}, bonus: ${bonusNumber}`)
+            return results
+        }
+        
+        if (!drawDate) {
+            drawDate = new Date().toISOString().split('T')[0]
+            console.warn(`[Puppeteer Scraper] Table ${tableIndex}: date not found, using current date`)
+        }
+        
+        results.push({
+            drawDate,
+            mainNumbers: numbers.sort((a, b) => a - b),
+            bonusNumber,
+            drawNumber,
+        })
+        
+        console.log(`[Puppeteer Scraper] ✓ Table ${tableIndex}: ${drawDate} (回号: ${drawNumber || 'N/A'}), 本数字: [${numbers.join(',')}], ボーナス: ${bonusNumber}`)
+        
+    } catch (error) {
+        console.error(`[Puppeteer Scraper] Error processing table ${tableIndex}:`, error)
+    }
+    
+    return results
+}
+
+/**
  * Puppeteerを使用してロト6の公式サイトから当選番号をスクレイピング
  * 動的に生成されるコンテンツに対応
+ * テストアプリの成功パターンを適用
  * @param url スクレイピングするURL
  * @returns 当選番号の配列
  */
@@ -332,163 +436,73 @@ export async function scrapeWinningNumbersWithPuppeteer(url: string): Promise<Sc
             argsCount: launchOptions.args.length,
         })
         
+        // 環境に応じて適切なpuppeteerインスタンスを取得
+        const puppeteer = await getPuppeteer()
         browser = await puppeteer.launch(launchOptions)
         const page = await browser.newPage()
         
         // User-Agentを設定
         await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
         
-        // ページにアクセス（コンテンツが完全に読み込まれるまで待機）
-        await page.goto(url, { 
+        // ページにアクセス（テストアプリの成功パターン）
+        await page.goto(url, {
             waitUntil: 'networkidle2',
-            timeout: 30000 
+            timeout: 30000,
         })
         
-        // 少し待機してJavaScriptの実行を確実にする
-        await page.waitForTimeout(2000)
+        // JavaScript実行を待つ（テストアプリの成功パターン）
+        try {
+            await page.waitForSelector('.js-lottery-issue-pc, table, [class*="loto"]', { timeout: 10000 })
+        } catch (e) {
+            // セレクタが見つからない場合は5秒待機（テストアプリの成功パターン）
+            console.log('[Puppeteer Scraper] Selector not found, waiting 5 seconds...')
+            await page.waitForTimeout(5000)
+        }
         
         // HTMLコンテンツを取得
         const html = await page.content()
         console.log(`[Puppeteer Scraper] HTML length: ${html.length} characters`)
         
-        // CheerioでHTMLをパース（既存のロジックを再利用）
+        // CheerioでHTMLをパース（テストアプリの成功パターンを適用）
         const $ = cheerio.load(html)
         const results: ScrapedWinningNumbers[] = []
         
-        // テーブルを取得
-        const tables = $('table')
-        console.log(`[Puppeteer Scraper] Found ${tables.length} table(s)`)
+        // テストアプリの成功パターン：.js-lottery-issue-pcから.closest('table')で最初のテーブルを取得
+        const issueElement = $('.js-lottery-issue-pc').first()
         
-        // 既存のscrapeWinningNumbers関数と同じロジックでパース
-        tables.each((tableIndex, table) => {
-            const $table = $(table)
-            
-            try {
-                // 抽選日を取得
-                let drawDate = ''
-                const drawDateRow = $table.find('tr').filter((_, row) => {
-                    const thText = $(row).find('th').text().trim()
-                    return thText.includes('抽せん日')
-                })
-                
-                if (drawDateRow.length > 0) {
-                    let dateText = drawDateRow.find('.js-lottery-date-pc').text().trim()
-                    if (!dateText) {
-                        dateText = drawDateRow.find('p').text().trim()
-                    }
-                    if (!dateText) {
-                        dateText = drawDateRow.find('td').text().trim()
-                    }
-                    if (dateText) {
-                        const match = dateText.match(/(\d{4})年(\d{1,2})月(\d{1,2})日/)
-                        if (match) {
-                            const [, year, month, day] = match
-                            drawDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`
-                        }
-                    }
-                }
-                
-                // 回号を取得
-                let drawNumber: number | undefined
-                const tableText = $table.text()
-                const drawMatch = tableText.match(/第(\d+)回/)
-                if (drawMatch) {
-                    drawNumber = parseInt(drawMatch[1], 10)
-                }
-                
-                // 本数字を取得
-                const mainNumbersRow = $table.find('tr').filter((_, row) => {
-                    const thText = $(row).find('th').text().trim()
-                    return thText.includes('本数字')
-                })
-                
-                const mainNumbers: number[] = []
-                if (mainNumbersRow.length > 0) {
-                    mainNumbersRow.find('td').each((_, td) => {
-                        const $td = $(td)
-                        const numberElem = $td.find('.js-lottery-number-pc').first()
-                        if (numberElem.length === 0) {
-                            const boldElem = $td.find('b.section__text--bold').first()
-                            if (boldElem.length > 0) {
-                                const text = boldElem.text().trim()
-                                const numMatch = text.match(/\d+/)
-                                if (numMatch) {
-                                    const num = parseInt(numMatch[0], 10)
-                                    if (!isNaN(num) && num >= 1 && num <= 43) {
-                                        mainNumbers.push(num)
-                                    }
-                                }
-                            }
-                        } else {
-                            const text = numberElem.text().trim()
-                            const numMatch = text.match(/\d+/)
-                            if (numMatch) {
-                                const num = parseInt(numMatch[0], 10)
-                                if (!isNaN(num) && num >= 1 && num <= 43) {
-                                    mainNumbers.push(num)
-                                }
-                            }
-                        }
-                    })
-                }
-                
-                // ボーナス数字を取得
-                const bonusNumbersRow = $table.find('tr').filter((_, row) => {
-                    const thText = $(row).find('th').text().trim()
-                    return thText.includes('ボーナス数字')
-                })
-                
-                let bonusNumber = NaN
-                if (bonusNumbersRow.length > 0) {
-                    bonusNumbersRow.find('td').each((_, td) => {
-                        const $td = $(td)
-                        const bonusElem = $td.find('.js-lottery-bonus-pc').first()
-                        if (bonusElem.length === 0) {
-                            const boldElem = $td.find('b.section__text--bold').first()
-                            if (boldElem.length > 0) {
-                                const text = boldElem.text().trim()
-                                const numMatch = text.match(/\(?(\d+)\)?/)
-                                if (numMatch) {
-                                    const num = parseInt(numMatch[1], 10)
-                                    if (!isNaN(num) && num >= 1 && num <= 43) {
-                                        bonusNumber = num
-                                        return false
-                                    }
-                                }
-                            }
-                        } else {
-                            const text = bonusElem.text().trim()
-                            const numMatch = text.match(/\(?(\d+)\)?/)
-                            if (numMatch) {
-                                const num = parseInt(numMatch[1], 10)
-                                if (!isNaN(num) && num >= 1 && num <= 43) {
-                                    bonusNumber = num
-                                    return false
-                                }
-                            }
-                        }
-                    })
-                }
-                
-                // 必要な情報が揃っている場合のみ結果に追加
-                if (mainNumbers.length === 6 && !isNaN(bonusNumber) && bonusNumber >= 1 && bonusNumber <= 43) {
-                    if (!drawDate) {
-                        drawDate = new Date().toISOString().split('T')[0]
-                        console.warn(`[Puppeteer Scraper] Table ${tableIndex}: date not found, using current date`)
-                    }
-                    
-                    results.push({
-                        drawDate,
-                        mainNumbers: mainNumbers.sort((a, b) => a - b),
-                        bonusNumber,
-                        drawNumber,
-                    })
-                    console.log(`[Puppeteer Scraper] ✓ Table ${tableIndex}: ${drawDate} (回号: ${drawNumber || 'N/A'}), 本数字: [${mainNumbers.join(',')}], ボーナス: ${bonusNumber}`)
-                }
-            } catch (error) {
-                console.error(`[Puppeteer Scraper] Error processing table ${tableIndex}:`, error)
+        if (issueElement.length === 0) {
+            console.warn('[Puppeteer Scraper] .js-lottery-issue-pc not found, trying fallback method...')
+            // フォールバック：テーブルを直接探す
+            const tables = $('table')
+            console.log(`[Puppeteer Scraper] Found ${tables.length} table(s) using fallback`)
+            if (tables.length === 0) {
+                console.error('[Puppeteer Scraper] No tables found')
+                return results
             }
-        })
+            // 最初のテーブルを処理
+            const firstTable = $(tables[0])
+            return extractDataFromTable($, firstTable, 0)
+        }
+        
+        // 回別を取得
+        const issueText = issueElement.text().trim()
+        console.log(`[Puppeteer Scraper] Issue text: ${issueText}`)
+        
+        // 回別を含むテーブルを取得（テストアプリの成功パターン）
+        const firstTable = issueElement.closest('table')
+        
+        if (firstTable.length === 0) {
+            console.error('[Puppeteer Scraper] Table not found for .js-lottery-issue-pc')
+            return results
+        }
+        
+        console.log(`[Puppeteer Scraper] Found table using .closest('table') method`)
+        
+        // テーブルからデータを抽出（テストアプリの成功パターン）
+        const extracted = extractDataFromTable($, firstTable, 0)
+        if (extracted.length > 0) {
+            results.push(...extracted)
+        }
         
         console.log(`[Puppeteer Scraper] Total results found: ${results.length} for ${url}`)
         return results

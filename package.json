@@ -32,6 +32,7 @@
     "@types/puppeteer-core": "^5.4.0",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "puppeteer": "^24.35.0",
     "tailwindcss": "^4",
     "typescript": "^5"
   }
