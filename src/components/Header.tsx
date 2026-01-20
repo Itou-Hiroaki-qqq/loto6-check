@@ -29,7 +29,13 @@ export default function Header() {
 
     const handleLogout = async () => {
         await supabase.auth.signOut()
+        setIsOpen(false)
         router.push('/login')
+    }
+
+    const handleTopClick = () => {
+        setIsOpen(false)
+        router.push('/')
     }
 
     return (
@@ -40,12 +46,12 @@ export default function Header() {
                 </Link>
             </div>
             <div className="flex-none" ref={dropdownRef}>
-                <div className="dropdown dropdown-end">
-                    <div
-                        tabIndex={0}
-                        role="button"
+                <div className="relative">
+                    <button
+                        type="button"
                         className="btn btn-ghost btn-circle"
                         onClick={() => setIsOpen(!isOpen)}
+                        aria-label="メニューを開く"
                     >
                         <svg
                             xmlns="http://www.w3.org/2000/svg"
@@ -61,19 +67,18 @@ export default function Header() {
                                 d="M4 6h16M4 12h16M4 18h16"
                             />
                         </svg>
-                    </div>
+                    </button>
                     {isOpen && (
-                        <ul
-                            tabIndex={0}
-                            className="menu menu-sm dropdown-content mt-3 z-1 p-2 shadow bg-base-100 rounded-box w-52"
-                        >
+                        <ul className="menu menu-sm absolute right-0 mt-3 z-10001000 p-2 shadow-lg bg-base-100 rounded-box w-52">
                             <li>
-                                <Link href="/" onClick={() => setIsOpen(false)}>
+                                <a onClick={handleTopClick} className="cursor-pointer">
                                     TOP
-                                </Link>
+                                </a>
                             </li>
                             <li>
-                                <a onClick={handleLogout}>ログアウト</a>
+                                <a onClick={handleLogout} className="cursor-pointer">
+                                    ログアウト
+                                </a>
                             </li>
                         </ul>
                     )}
