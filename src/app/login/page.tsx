@@ -31,6 +31,10 @@ export default function LoginPage() {
                 return
             }
 
+            // "ログイン情報を記録する" の設定を保存
+            localStorage.setItem('rememberMe', String(rememberMe))
+            sessionStorage.setItem('sessionActive', 'true')
+
             router.push('/')
         } catch (err) {
             setError('ログインに失敗しました')

@@ -1,19 +1,12 @@
 'use client'
 
-import { formatNumber, checkLoto6 } from '@/lib/loto6/check'
-import { WinningNumbers } from '@/lib/loto6/types'
+import { formatNumber } from '@/lib/loto6/check'
+import { CheckResult } from '@/lib/loto6/types'
 
-interface CheckResult {
-    userNumberId: string
-    userNumbers: number[]
-    prizeLevel: string
-    matchCount: number
-    bonusMatch: boolean
-    winningNumbers: WinningNumbers
-}
+type CheckResultWithId = CheckResult & { userNumberId: string }
 
 interface WinningNumbersTableProps {
-    results: CheckResult[]
+    results: CheckResultWithId[]
     userNumbersList: Array<{ id: string; numbers: number[] }>
 }
 
@@ -51,7 +44,7 @@ export default function WinningNumbersTable({
         }
         acc[date].push(result)
         return acc
-    }, {} as Record<string, CheckResult[]>)
+    }, {} as Record<string, CheckResultWithId[]>)
 
     const sortedDates = Object.keys(groupedResults).sort(
         (a, b) => b.localeCompare(a)

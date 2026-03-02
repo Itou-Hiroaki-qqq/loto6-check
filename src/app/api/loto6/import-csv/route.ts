@@ -7,6 +7,13 @@ import { sql } from '@/lib/neon'
  * または配列形式: [[回号, 日付, 数字1, ..., 数字6, ボーナス], ...]
  */
 export async function POST(request: NextRequest) {
+    // APIキー認証
+    const authHeader = request.headers.get('authorization')
+    const apiKey = process.env.AUTO_UPDATE_API_KEY
+    if (!apiKey || authHeader !== `Bearer ${apiKey}`) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
     try {
         const contentType = request.headers.get('content-type') || ''
         

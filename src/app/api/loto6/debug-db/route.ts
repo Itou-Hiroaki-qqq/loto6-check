@@ -1,11 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { sql } from '@/lib/neon'
 
+type WinningRow = {
+    draw_date: string
+    main_numbers: number[]
+    bonus_number: number
+    draw_number: number | null
+    created_at: string
+    updated_at: string
+}
+
 /**
  * データベースの状態を確認するデバッグ用API
- * 認証不要で最新の当選番号を確認できます
  */
 export async function GET(request: NextRequest) {
+    // APIキー認証
+    const apiKey = process.env.AUTO_UPDATE_API_KEY
+    const authHeader = request.headers.get('authorization')
+    if (!apiKey || authHeader !== `Bearer ${apiKey}`) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
     try {
         // 最新10件の当選番号を取得
         const latestWinningNumbers = await sql`
@@ -39,7 +54,7 @@ export async function GET(request: NextRequest) {
             success: true,
             totalCount: Number(totalCount),
             latestDate,
-            latestWinningNumbers: latestWinningNumbers.map((row: any) => ({
+            latestWinningNumbers: (latestWinningNumbers as WinningRow[]).map((row) => ({
                 drawDate: row.draw_date,
                 mainNumbers: row.main_numbers,
                 bonusNumber: row.bonus_number,

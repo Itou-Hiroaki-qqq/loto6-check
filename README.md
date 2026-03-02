@@ -8,7 +8,7 @@
 
 ## 機能
 
-- **ユーザー認証** … 新規登録・ログイン（Supabase Auth）
+- **ユーザー認証** … 新規登録・ログイン・ログイン情報の記憶（Supabase Auth）
 - **番号登録** … 1～43の数字から6個を登録（重複不可）
 - **当選チェック** … データベースの当選番号と照合し、1等～5等・はずれを判定
 - **期間指定** … 開始日・終了日を指定してチェック（未指定時は最新10件）
@@ -37,8 +37,8 @@
 │   │   │   ├── list/           # 登録番号一覧（認証必要）
 │   │   │   ├── register/      # 番号登録（認証必要）
 │   │   │   ├── delete/        # 番号削除（認証必要）
-│   │   │   ├── import-csv/    # CSV一括インポート
-│   │   │   └── debug-db/      # DB状態確認（開発・デバッグ用）
+│   │   │   ├── import-csv/    # CSV一括インポート（APIキー認証必要）
+│   │   │   └── debug-db/      # DB状態確認（APIキー認証必要）
 │   │   ├── login/
 │   │   ├── signup/
 │   │   ├── page.tsx            # トップ（メイン画面）
@@ -52,10 +52,11 @@
 │   │   └── WinningNumbersTable.tsx
 │   ├── lib/
 │   │   ├── loto6/              # 当選判定ロジック・型
+│   │   ├── utils/              # 共通ユーティリティ
 │   │   ├── neon.ts             # DB接続
 │   │   ├── supabase/           # 認証クライアント
 │   │   └── db/schema.ts
-│   └── middleware.ts
+│   └── proxy.ts                # 認証プロキシ（Next.js 16）
 ├── migrations/                  # DBスキーマ
 ├── scripts/                     # インポート用スクリプト
 └── README.md
@@ -88,6 +89,9 @@ SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
 
 # Neon（PostgreSQL）
 DATABASE_URL=postgresql://user:password@xxxx.neon.tech/dbname?sslmode=require
+
+# APIキー（import-csv / debug-db の認証に使用）
+AUTO_UPDATE_API_KEY=your_api_key
 ```
 
 - Supabase: [Supabase](https://supabase.com) でプロジェクト作成 → Settings > API から URL とキーを取得
@@ -140,7 +144,7 @@ npm run dev
 
 ### 最新データの自動更新
 
-最新の当選番号は、別リポジトリの **loto6-auto-update**（Railway + cron-job.org）が、毎週月曜・木曜の22:00に公式サイトから取得し、同じNeonデータベースに保存します。本リポジトリにはスクレイピング処理は含まれません。
+最新の当選番号は、別リポジトリの **loto6-auto-update**（Cloud Run + cron-job.org）が、毎週月曜・木曜の22:00に公式サイトから取得し、同じNeonデータベースに保存します。本リポジトリにはスクレイピング処理は含まれません。
 
 - リポジトリ: [loto6-auto-update](https://github.com/Itou-Hiroaki-qqq/loto6-auto-update)
 - 自動更新が動かない場合: [TROUBLESHOOTING.md](./TROUBLESHOOTING.md) を参照
@@ -148,8 +152,8 @@ npm run dev
 ## デプロイ（Vercel）
 
 1. [Vercel](https://vercel.com) でプロジェクトを作成し、このリポジトリを連携
-2. 環境変数に以下を設定  
-   `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `DATABASE_URL`
+2. 環境変数に以下を設定
+   `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `DATABASE_URL`, `AUTO_UPDATE_API_KEY`
 3. デプロイ
 
 このアプリはフロント＋APIのみのため、Vercelの無料枠で運用可能です。当選番号の自動取得は loto6-auto-update 側で行います。
@@ -161,12 +165,12 @@ npm run dev
 | [SETUP.md](./SETUP.md) | セットアップの詳細（Supabase認証設定など） |
 | [IMPORT_CSV.md](./IMPORT_CSV.md) | CSVインポート手順 |
 | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md) | 自動更新が動かないときの確認手順 |
-| [RAILWAY_DELETE_PROJECT.md](./RAILWAY_DELETE_PROJECT.md) | Railwayプロジェクト削除手順（参考） |
+| [RAILWAY_DELETE_PROJECT.md](./RAILWAY_DELETE_PROJECT.md) | Railwayプロジェクト削除手順（移行済み・参考用） |
 
 ## 注意事項
 
 - 当選番号は公式サイト（みずほ銀行のロト6ページ）を参照しています。サイト構造変更時は loto6-auto-update 側のスクレイパー修正が必要になる場合があります。
-- `/api/loto6/debug-db` は認証なしでDBの状態を返すため、本番では必要に応じて削除または制限してください。
+- `/api/loto6/debug-db` は `AUTO_UPDATE_API_KEY` による Bearer トークン認証が必要です。
 
 ## ライセンス
 

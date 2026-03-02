@@ -9,6 +9,8 @@ import Loto6NumberInput from '@/components/Loto6NumberInput'
 import RegisteredNumbers from '@/components/RegisteredNumbers'
 import WinningNumbersTable from '@/components/WinningNumbersTable'
 import { format } from 'date-fns'
+import { CheckResult } from '@/lib/loto6/types'
+import { isJsonResponse } from '@/lib/utils/isJsonResponse'
 
 interface RegisteredNumber {
   id: string
@@ -16,22 +18,11 @@ interface RegisteredNumber {
   created_at: string
 }
 
-interface CheckResult {
-  userNumberId: string
-  userNumbers: number[]
-  prizeLevel: string
-  matchCount: number
-  bonusMatch: boolean
-  winningNumbers: {
-    drawDate: string
-    mainNumbers: number[]
-    bonusNumber: number
-  }
-}
+type CheckResultWithId = CheckResult & { userNumberId: string }
 
 export default function Home() {
   const [registeredNumbers, setRegisteredNumbers] = useState<RegisteredNumber[]>([])
-  const [checkResults, setCheckResults] = useState<CheckResult[]>([])
+  const [checkResults, setCheckResults] = useState<CheckResultWithId[]>([])
   const [loading, setLoading] = useState(false)
   const [registerLoading, setRegisterLoading] = useState(false)
   const [deleting, setDeleting] = useState<string | null>(null)
@@ -65,16 +56,26 @@ export default function Home() {
       router.push('/login')
       return false
     }
+
+    // "ログイン情報を記録する" がオフの場合、ブラウザを閉じたらログアウト
+    const rememberMe = localStorage.getItem('rememberMe')
+    const sessionActive = sessionStorage.getItem('sessionActive')
+    if (rememberMe === 'false' && !sessionActive) {
+      await supabase.auth.signOut()
+      router.push('/login')
+      return false
+    }
+
+    // このタブでのセッションをアクティブとしてマーク
+    sessionStorage.setItem('sessionActive', 'true')
     return true
   }
 
   const loadRegisteredNumbers = async () => {
     try {
       const response = await fetch('/api/loto6/list')
-      
-      // リダイレクトされた場合（HTMLが返る）
-      const contentType = response.headers.get('content-type')
-      if (!contentType || !contentType.includes('application/json')) {
+
+      if (!isJsonResponse(response)) {
         console.warn('Response is not JSON, might be redirected')
         return
       }
@@ -107,9 +108,7 @@ export default function Home() {
         body: JSON.stringify({}),
       })
 
-      // リダイレクトされた場合（HTMLが返る）
-      const contentType = response.headers.get('content-type')
-      if (!contentType || !contentType.includes('application/json')) {
+      if (!isJsonResponse(response)) {
         console.warn('Response is not JSON, might be redirected')
         return
       }
@@ -145,9 +144,7 @@ export default function Home() {
         body: JSON.stringify({ numbers }),
       })
 
-      // リダイレクトされた場合（HTMLが返る）
-      const contentType = response.headers.get('content-type')
-      if (!contentType || !contentType.includes('application/json')) {
+      if (!isJsonResponse(response)) {
         if (response.status === 401) {
           router.push('/login')
         } else {
@@ -159,9 +156,7 @@ export default function Home() {
       if (response.ok) {
         await loadRegisteredNumbers()
         // 登録後にチェック結果を更新
-        if (registeredNumbers.length > 0 || true) {
-          await loadDefaultCheckResults()
-        }
+        await loadDefaultCheckResults()
       } else {
         const errorData = await response.json()
         alert(errorData.error || '登録に失敗しました')
@@ -213,9 +208,7 @@ export default function Home() {
         }),
       })
 
-      // リダイレクトされた場合（HTMLが返る）
-      const contentType = response.headers.get('content-type')
-      if (!contentType || !contentType.includes('application/json')) {
+      if (!isJsonResponse(response)) {
         if (response.status === 401) {
           router.push('/login')
         } else {
